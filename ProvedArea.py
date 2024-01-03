@@ -18,13 +18,7 @@ from shapely.geometry import Polygon
 import alphashape
 
 class ProvedArea:
-    def __init__(self,realizations):
-
-        #Pull in the Well Header CSV export and the Forecast Parameters CSV export from CC
-        header_path = 'ComboCurve Header Example.csv'
-        forecast_parameters_path = 'ComboCurve Forecast Parameter Example.csv'
-        #header_path = r"C:\\Users\\Travis Salomaki\\Downloads\\EF_Wells.csv"
-        #forecast_parameters_path = r"C:\\Users\\Travis Salomaki\\Downloads\\EF_Forecast_Parameters.csv"
+    def __init__(self, realizations, header_path, forecast_parameters_path):
 
         #Read in forecast_parameters file & perform a quick data cleaning
         forecast_parameters = pd.read_csv(forecast_parameters_path,usecols=['Well Name',
@@ -34,7 +28,6 @@ class ProvedArea:
         forecast_parameters.drop_duplicates(inplace = True)
         forecast_parameters.reset_index(inplace = True, drop = True)
         forecast_parameters['INPT ID'] = forecast_parameters['INPT ID'].astype(str)
-        #forecast_parameters.drop(forecast_parameters['EUR/FT (BBL/FT, MCF/FT)'].isna(),inplace = True)
 
         #Read in the header file & format the INPT column
         headers = pd.read_csv(header_path,usecols=["INPT ID","Surface Latitude",'Surface Longitude','Perf Lateral Length'])
@@ -453,7 +446,7 @@ class ProvedArea:
             avgs.insert(1,anchor_mean)
             counts.insert(1,len(self.anchors_idx))
 
-            fig,ax = plt.subplots(1,2,figsize = [15,5])
+            fig,ax = plt.subplots(1,2,figsize = [18,10])
             xticks = ['Analog Wells','Anchor Wells'] + [ 'r' + str(i) for i in range(1,len(self.mask_list)+1)]
             ax[0].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45)
             ax[1].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45)
@@ -478,7 +471,7 @@ class ProvedArea:
         NOTE: This function only works if you run a single realization.
         """
         if self.realizations == 1:   
-            _, ax = plt.subplots(figsize = [13,15])
+            _, ax = plt.subplots(figsize = [10,13])
             self.generate_boundary(self.generate_radii(self.radii_list[self.proved_radii])).plot(ax=ax,alpha = 1,color = 'lightblue')
             for i in self.proved_area_realizations[-1]:
                 gpd.GeoSeries(Polygon(i)).plot(ax=ax,alpha = 0.8,color = 'darkblue')
@@ -503,7 +496,7 @@ class ProvedArea:
         """
 
         if self.realizations == 1:
-            fig,ax = plt.subplots(figsize=[12,12])
+            fig,ax = plt.subplots(figsize=[10,13])
             ax.set_xlabel('Longitude')
             ax.set_ylabel('Latitude')
             self.gdf.plot(label = 'Analog Wells',ax =ax,color = 'black')
@@ -524,11 +517,14 @@ class ProvedArea:
     def plot_aggregate_realization(self,p_series = 0):
         quantile = np.quantile(self.stacked_realization['count'].values,1-p_series)
         stacked_realization_subset = self.stacked_realization.loc[self.stacked_realization['count'] >= quantile]
+        cbar_min = stacked_realization_subset['count'].min()
+        cbar_max = stacked_realization_subset['count'].max()
 
         stacked_realization_subset_boundary = gpd.GeoDataFrame(geometry=[stacked_realization_subset.geometry.unary_union.boundary])
 
-        _, ax = plt.subplots(figsize = [10,10])
-        overlaps = stacked_realization_subset.plot(ax=ax,column = 'count',legend = True,cmap = 'plasma', edgecolor = 'none')
+
+        _, ax = plt.subplots(figsize = [10,13])
+        overlaps = stacked_realization_subset.plot(ax=ax,column = 'count',legend = True,cmap = 'plasma', edgecolor = 'none',vmin = cbar_min, vmax = cbar_max)
         boundary = stacked_realization_subset_boundary.plot(ax=ax, color = 'black')
         self.gdf.plot(ax=ax,color = 'black',label = 'Analog Wells',markersize = 3)
         ax.set_title(f'Aggregate Realization (P{int(p_series*100)})')
