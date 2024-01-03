@@ -270,7 +270,7 @@ class ProvedArea:
      
     def generate_proved_areas(self):
         """
-        Generates a list of coordinates pertaining to the proveda area(s) of the reservoir. 
+        Generates a list of coordinates pertaining to the proved area(s) of the reservoir. 
 
         Basically, we take the 'proved' radii level and generate buffer circles around our anchor wells.
         We then merge those buffer circles into a single multi-polygon and check what points exist within it. 

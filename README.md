@@ -14,6 +14,8 @@ At the time of Monograph 3's publication, implementing the Expanding Concentric 
 
 ## <b>Getting Started</b>
 
+For a complete demonstration of the package's functionality, feel free to check out the `ProvedArea.ipynb` file.
+
 #### **Assumptions**
 * The well set comprises of a single 'contiguous' drilling area.
 * The target resource play is considered to be in the "statistical phase" of maturity. 
