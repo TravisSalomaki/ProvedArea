@@ -446,7 +446,7 @@ class ProvedArea:
             avgs.insert(1,anchor_mean)
             counts.insert(1,len(self.anchors_idx))
 
-            fig,ax = plt.subplots(1,2,figsize = [18,10])
+            fig,ax = plt.subplots(1,2,figsize = [13,7])
             xticks = ['Analog Wells','Anchor Wells'] + [ 'r' + str(i) for i in range(1,len(self.mask_list)+1)]
             ax[0].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45)
             ax[1].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45)
@@ -471,7 +471,7 @@ class ProvedArea:
         NOTE: This function only works if you run a single realization.
         """
         if self.realizations == 1:   
-            _, ax = plt.subplots(figsize = [10,13])
+            _, ax = plt.subplots(figsize = [8,10])
             self.generate_boundary(self.generate_radii(self.radii_list[self.proved_radii])).plot(ax=ax,alpha = 1,color = 'lightblue')
             for i in self.proved_area_realizations[-1]:
                 gpd.GeoSeries(Polygon(i)).plot(ax=ax,alpha = 0.8,color = 'darkblue')
@@ -496,7 +496,7 @@ class ProvedArea:
         """
 
         if self.realizations == 1:
-            fig,ax = plt.subplots(figsize=[10,13])
+            fig,ax = plt.subplots(figsize=[8,10])
             ax.set_xlabel('Longitude')
             ax.set_ylabel('Latitude')
             self.gdf.plot(label = 'Analog Wells',ax =ax,color = 'black')
@@ -514,20 +514,20 @@ class ProvedArea:
             print("Too many realizations. Please instantiate a new ProvedArea object with the realizations parameter set to '1'")
         return None
     
-    def plot_aggregate_realization(self,p_series = 0):
-        quantile = np.quantile(self.stacked_realization['count'].values,1-p_series)
+    def plot_aggregate_realization(self,percentile = 0):
+        quantile = np.quantile(self.stacked_realization['count'].values,1-percentile)
         stacked_realization_subset = self.stacked_realization.loc[self.stacked_realization['count'] >= quantile]
-        cbar_min = stacked_realization_subset['count'].min()
-        cbar_max = stacked_realization_subset['count'].max()
+        cbar_min = self.stacked_realization['count'].min()
+        cbar_max = self.stacked_realization['count'].max()
 
         stacked_realization_subset_boundary = gpd.GeoDataFrame(geometry=[stacked_realization_subset.geometry.unary_union.boundary])
 
 
-        _, ax = plt.subplots(figsize = [10,13])
+        _, ax = plt.subplots(figsize = [8,10])
         overlaps = stacked_realization_subset.plot(ax=ax,column = 'count',legend = True,cmap = 'plasma', edgecolor = 'none',vmin = cbar_min, vmax = cbar_max)
         boundary = stacked_realization_subset_boundary.plot(ax=ax, color = 'black')
         self.gdf.plot(ax=ax,color = 'black',label = 'Analog Wells',markersize = 3)
-        ax.set_title(f'Aggregate Realization (P{int(p_series*100)})')
+        ax.set_title(f'Aggregate Realization (P{int(percentile*100)})')
         ax.set_xlabel("Longitude")
         ax.set_ylabel("Latitude")
         ax.legend()
@@ -541,7 +541,7 @@ class ProvedArea:
         except FileExistsError:
             pass
 
-        quantile = np.quantile(g.stacked_realization['count'].values,1-p_series)
+        quantile = np.quantile(self.stacked_realization['count'].values,1-p_series)
         stacked_realization_subset = self.stacked_realization.loc[self.stacked_realization['count'] >= quantile]
 
         shapefile_gdf = gpd.GeoDataFrame(geometry=[stacked_realization_subset.geometry.unary_union],crs = 'EPSG:4326')

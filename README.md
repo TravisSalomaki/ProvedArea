@@ -20,20 +20,22 @@ At the time of Monograph 3's publication, implementing the Expanding Concentric 
 
 #### **Inputs**
 
-All program inputs are taken directly from easily accesible ComboCurve exports. 
+All program inputs are taken directly from easily accesible ComboCurve exports. To use ProvedArea.py you'll need the following:
 * ComboCurve Well Header Export (.csv)
 * ComboCurve Forecast Parameter Export (.csv)
 
 To access the Well Header Export, navigate to the Project Wells tab of your ComboCurve project and click the download icon located in the top right corner of the well header table. To access the Forecast Parameter Export, open a ComboCurve forecast set, click "Forecast Options," and then click "Export Forecast Parameters (CSV)."
 
 #### **Requirements**
+
+Before you instantiate a ProvedArea object, please make sure that your data set meets the following requirements:
 * All wells in the forecast set have a forecast generated for the oil phase and have a perforated lateral length (PLL) populated in the well header table. 
 * All wells need both a surface latitude and a surface longitude field populated in the well header table. 
 
 
 ## <b>Dependencies</b>
 
-The functions rely on the following packages:
+ProvedArea.py relies on the following packages:
 
 1. <b>pandas</b>
 1. <b>numpy</b>
@@ -47,3 +49,8 @@ If you get a package import error, you may have to first install some of these p
 ## References:
 1. Guidelines for the Practical Evaluation of Undeveloped Reserves in Resource Plays. SPEE Society of Petroleum Evaluation Engineers, 2010. 
 2. https://www.investopedia.com/terms/p/proven-reserves.asp
+
+## Planned Additions
+1. Give users the ability to choose between using the oil or the gas phase. 
+2. More robust error handling.
+3. Parallelized realizations. 
