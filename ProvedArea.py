@@ -518,7 +518,9 @@ class ProvedArea:
             ax[1].scatter(np.arange(len(self.mask_list)+2),counts,color = 'black')
 
             for i, label in enumerate(counts):
-                ax[1].annotate(label,(np.arange(len(self.mask_list)+2)[i], counts[i]), textcoords = 'offset points', xytext=(0,10), ha = 'center')
+                ax[1].annotate(label,(np.arange(len(self.mask_list)+2)[i], counts[i]), textcoords = 'offset points', xytext=(0,20), ha = 'center')
+
+            ax[0].annotate(round(0.9*analog_mean,1), (0,0.9*analog_mean),textcoords = 'offset points', xytext = (0,5), ha = 'left')
 
             ax[0].legend()
             ax[1].legend()
