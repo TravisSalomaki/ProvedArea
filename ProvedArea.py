@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 import seaborn as sns
-sns.set_theme()
 
 import geopandas as gpd
 
@@ -18,32 +17,17 @@ from shapely.geometry import Polygon
 import alphashape
 
 class ProvedArea:
-    def __init__(self, realizations, header_path, forecast_parameters_path):
+    def __init__(self, realizations: int, header_path: str, forecast_parameters_path: str, phase = 'oil'):
 
-        #Read in forecast_parameters file & perform a quick data cleaning
-        forecast_parameters = pd.read_csv(forecast_parameters_path,usecols=['Well Name',
-                                                                            'INPT ID',
-                                                                            'EUR (MBBL, MMCF)',
-                                                                            'EUR/FT (BBL/FT, MCF/FT)'])
-        forecast_parameters.drop_duplicates(inplace = True)
-        forecast_parameters.reset_index(inplace = True, drop = True)
-        forecast_parameters['INPT ID'] = forecast_parameters['INPT ID'].astype(str)
-
-        #Read in the header file & format the INPT column
-        headers = pd.read_csv(header_path,usecols=["INPT ID","Surface Latitude",'Surface Longitude','Perf Lateral Length'])
-        headers['INPT ID'] = headers['INPT ID'].astype(str)
-
-        #Merge forecast_parameters with headers to create a DataFrame containing both header info plus forecast parameter info
-        df = pd.merge(left = forecast_parameters, right = headers, how = 'inner', on = 'INPT ID')
+        df = self.parse_data(header_path, forecast_parameters_path, phase)
 
         #Create a GeoPandas DataFrame and define the active geometry as the Surface Lat Long points
         self.gdf = gpd.GeoDataFrame(df, geometry = gpd.points_from_xy(df['Surface Longitude'], df['Surface Latitude']))
-        self.gdf.drop(self.gdf[self.gdf['EUR/FT (BBL/FT, MCF/FT)'].isna()].index,inplace=True)
+        self.gdf.drop(self.gdf.loc[self.gdf['EUR/FT (BBL/FT, MCF/FT)'].isna()].index,inplace=True)
         self.gdf.reset_index(inplace = True, drop = True)
-        
 
         #Instantiates `self.radii_list` which contains the distance, in miles, of each of the radii to be created
-        self.radii_list = np.array([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0])
+        self.radii_list = np.arange(1.0,100.0)
 
         #Instantiates `self.mask_list` which will hold each of the created masks (i.e. which points belong to which radii)
         self.mask_list = []
@@ -52,6 +36,8 @@ class ProvedArea:
         self.radii_level = 1
 
         #Sets the number of realizations
+        if not isinstance(realizations, int) or realizations <= 0:
+            raise ValueError("The number of friends must be a positive integer.")
         self.realizations = realizations
 
         #Instantiates the self.failed_realizations attribute
@@ -59,6 +45,36 @@ class ProvedArea:
 
         #Executes the self.driver() function
         self.driver()
+
+    def parse_data(self, header_path, forecast_parameters_path, phase = 'oil'):
+        """
+        ARGS:
+        header_path (str): File path pointing towards ComboCurve well header export
+        forecast_parameters_path (str): File path pointing towards ComboCurve forecast parameter export
+
+        RETURNS:
+        master_df (DataFrame): Merged DataFrame containg both header and forecast parameter information
+        """
+        #Read in forecast_parameters file & perform a quick data cleaning
+        forecast_parameters = pd.read_csv(forecast_parameters_path, usecols=['Well Name','INPT ID',
+                                                                            'EUR (MBBL, MMCF)',
+                                                                            'EUR/FT (BBL/FT, MCF/FT)',
+                                                                            'Phase'])
+        forecast_parameters = forecast_parameters.loc[forecast_parameters['Phase'] == phase] #filter to a particular phase
+        forecast_parameters = forecast_parameters.loc[~forecast_parameters['EUR/FT (BBL/FT, MCF/FT)'].isna()] #Make sure we have EUR/ft values
+        forecast_parameters = forecast_parameters.drop_duplicates() #multi-segment models yield multiple rows for a single well
+        forecast_parameters.reset_index(inplace = True, drop = True)
+
+        
+        headers = pd.read_csv(header_path,usecols=["INPT ID","Surface Latitude",'Surface Longitude','Perf Lateral Length']) #read in the header file
+        headers = headers.dropna(axis = 0, subset = ['Surface Latitude', 'Surface Longitude']) #drop any wells with missing lat/longs
+        headers.reset_index(inplace = True, drop = True) 
+
+        #Merge forecast_parameters with headers to create a DataFrame containing both header info plus forecast parameter info
+        master_df = pd.merge(left = forecast_parameters, right = headers, how = 'inner', on = 'INPT ID')
+
+        return master_df
+
 
     def calculate_p10_p90_ratio(self, x):
         """
@@ -209,64 +225,100 @@ class ProvedArea:
         self.radii_list[radii_level:] = self.radii_list[radii_level:] * 1.05
         return None
 
-    def iterate_masks(self):
-        """
-        Generate masks based on radii levels and append them to the mask list.
+    # def iterate_masks(self):
+    #     """
+    #     Masks are simply a means of classifying which wells belong in which radii groups. 
 
-        The function generates masks for different radii levels within a defined boundary. 
-        If a generated mask contains less than 50 points, it increases the radius and tries again. 
-        After attempting to increase the radius 5 times or reaching more than 50 points in the mask, 
-        it appends the created mask to the mask_list.
+    #     The function generates masks for different radii levels within a defined boundary. 
+    #     If a generated mask contains less than 50 points, it increases the radius and tries again. 
+    #     After attempting to increase the radius 5 times or reaching more than 50 points in the mask, 
+    #     it appends the created mask to the mask_list.
 
-        If the radii distance cannot be increased further, the loop terminates.
+    #     If the radii distance cannot be increased further, the loop terminates.
 
-        RETURNS:
-        None: Modifies the mask_list in place.
-        """
-        for _ in range(5):
+    #     RETURNS:
+    #     None: Modifies the mask_list in place.
+    #     """
+    #     for _ in range(5):
 
-            # Generate an initial mask attempt
-            mask = self.generate_mask(
-                self.generate_boundary(self.generate_radii(self.radii_list[self.radii_level-1])),
-                self.radii_level
-                )
+    #         # Generate an initial mask attempt -> []
+    #         mask = self.generate_mask(
+    #             self.generate_boundary(self.generate_radii(self.radii_list[self.radii_level-1])),
+    #             self.radii_level
+    #             )
 
+    #         update_count = 0
+    #         while mask.sum() <= 50:                             #<= fifty points in a given radii level
+    #             if update_count == 5:
+    #                 return  # Exit the function if radii cannot be increased further
+    #             self.update_radii_list(self.radii_level - 1)    #Expands the distance of the proceeding radii by 5%
+    #             update_count += 1
+
+    #             mask = self.generate_mask(
+    #                 self.generate_boundary(self.generate_radii(self.radii_list[self.radii_level - 1])),
+    #                 self.radii_level
+    #             )
+
+    #         self.mask_list.append(mask)
+
+    #         # Increment the radii_level parameter
+    #         self.radii_level += 1
+
+    # def compare_masks(self):
+    #     """
+
+    #     This function iterates through the list of radii from smallest to largest. 
+    #     It stops when either the mean EUR/ft value for a given radii level falls below 
+    #     90% of the Analog Well Set mean or when it reaches the last radii group.
+
+    #     RETURNS:
+    #     int: The radii level considered 'proved'.
+    #     """
+    #     proved_radii = 0
+    #     for idx,mask in enumerate(self.mask_list):
+    #         mask_mean = self.gdf[mask]['EUR/FT (BBL/FT, MCF/FT)'].mean()
+    #         if mask_mean < (0.9 *self.analog_mean):
+    #             proved_radii = idx-1
+    #             break
+    #         else:
+    #             proved_radii = idx
+    #     return proved_radii
+    
+    def iterate_and_compare_masks(self):
+
+        proved_radii_found = False
+
+        while not proved_radii_found:
+            #Generate an intial mask attempt
+            radius_distance = self.radii_list[self.radii_level-1]
+            mask = self.generate_mask(self.generate_boundary(self.generate_radii(radius_distance)),self.radii_level)
+
+            #Iterates current concentric radii until it either contains >50 wells or it's tried to expand its radial distance 5 times. 
             update_count = 0
-            while mask.sum() <= 50:
-                if update_count == 5:
-                    return  # Exit the function if radii cannot be increased further
-                self.update_radii_list(self.radii_level - 1)
+            while mask.sum() <= 50 and update_count < 5:
+                self.update_radii_list(self.radii_level - 1) #radii level is 1-indexed while radii-list is 0-indexed
+
+                radius_distance = self.radii_list[self.radii_level-1]
+                mask = self.generate_mask(self.generate_boundary(self.generate_radii(radius_distance)),self.radii_level)
+
                 update_count += 1
+            
+            self.mask_list.append(mask) #adds our mask to the mask_list
+            mean_eur_per_foot_of_current_radii = self.gdf[mask]['EUR/FT (BBL/FT, MCF/FT)'].mean()
 
-                mask = self.generate_mask(
-                    self.generate_boundary(self.generate_radii(self.radii_list[self.radii_level - 1])),
-                    self.radii_level
-                )
-
-            self.mask_list.append(mask)
-
-            # Increment the radii_level parameter
-            self.radii_level += 1
-
-    def compare_masks(self):
-        """
-
-        This function iterates through the list of radii from smallest to largest. 
-        It stops when either the mean EUR/ft value for a given radii level falls below 
-        90% of the Analog Well Set mean or when it reaches the last radii group.
-
-        RETURNS:
-        int: The radii level considered 'proved'.
-        """
-        proved_radii = 0
-        for idx,mask in enumerate(self.mask_list):
-            mask_mean = self.gdf[mask]['EUR/FT (BBL/FT, MCF/FT)'].mean()
-            if mask_mean < (0.9 *self.analog_mean):
-                proved_radii = idx-1
-                break
+            if len(self.mask_list) == 1:
+                if mean_eur_per_foot_of_current_radii < (0.9 * self.analog_mean):
+                    self.proved_radii = None
+                    proved_radii_found = True
+                else:
+                    self.radii_level += 1
+            elif len(self.mask_list) > 1 and mean_eur_per_foot_of_current_radii < (0.9 * self.analog_mean):
+                self.proved_radii = self.radii_level - 1 #we want to return the previous radii level since the current one is the one that broke our 90% constraint
+                proved_radii_found = True
             else:
-                proved_radii = idx
-        return proved_radii
+                self.radii_level += 1
+
+        return
      
     def generate_proved_areas(self):
         """
@@ -285,6 +337,9 @@ class ProvedArea:
         """
         # Clear the list before generating proved areas to ensure a clean start
         self.proved_areas = []
+
+        if self.proved_radii is None:
+            return None
 
         # Retrieve the polygons corresponding to the 'proved' radii level
         proved_radii_polygons = self.generate_boundary(self.generate_radii(self.radii_list[self.proved_radii]))[0].geoms
@@ -322,14 +377,15 @@ class ProvedArea:
             except ValueError:
                 print("Unable to generate anchor points. Input wellset population count is less than the calculated sample size.")
             
-            self.analog_mean = np.mean(self.gdf["EUR/FT (BBL/FT, MCF/FT)"])
-            self.anchor_mean = np.mean(self.gdf.loc[self.anchors_idx]["EUR/FT (BBL/FT, MCF/FT)"])
+            self.analog_mean = np.mean(self.gdf["EUR/FT (BBL/FT, MCF/FT)"]) #Get average EUR/FT of Analog wells
+            self.anchor_mean = np.mean(self.gdf.loc[self.anchors_idx]["EUR/FT (BBL/FT, MCF/FT)"]) #Get average EUR/ft of Anchor locations
             
             if self.anchor_mean >= 0.9 * self.analog_mean: #Check if the anchor points mean value is greater than 0.9*mean(analog wells)
-                self.iterate_masks() #Add all the masks to the mask_list
-                self.proved_radii = self.compare_masks() #Define the proved_radii level
+                # self.iterate_masks()                       #Defines which wells belong in which radii levels
+                # self.proved_radii = self.compare_masks()   #Analyzes the wells in various radii levels to determine which level is proved
+                self.iterate_and_compare_masks()
                 try:
-                    self.generate_proved_areas()
+                    self.generate_proved_areas()           #Generates the alphashapes
                 except AttributeError:
                     pass
 
@@ -368,7 +424,7 @@ class ProvedArea:
         """
 
         realization_list = []
-        for realization in [x for x in self.proved_area_realizations if x is not None]:
+        for realization in [x for x in self.proved_area_realizations if x is not None]: #accounts for realizations that didn't quite work out
             for coords in realization:
                 realization_list.append(Polygon(coords))
         all = gpd.GeoDataFrame(geometry = realization_list)
@@ -394,7 +450,7 @@ class ProvedArea:
         return None
 
     def driver(self):
-        self.proved_area_realizations = [None] * self.realizations
+        self.proved_area_realizations = [None] * self.realizations #Prepopulates the proved_area_realizations list with Nones
         self.realization_count = 0
 
         print("Generating realizations...")
@@ -446,7 +502,7 @@ class ProvedArea:
             avgs.insert(1,anchor_mean)
             counts.insert(1,len(self.anchors_idx))
 
-            fig,ax = plt.subplots(1,2,figsize = [13,7])
+            fig,ax = plt.subplots(1,2,figsize = [18,7])
             xticks = ['Analog Wells','Anchor Wells'] + [ 'r' + str(i) for i in range(1,len(self.mask_list)+1)]
             ax[0].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45)
             ax[1].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45)
@@ -455,10 +511,14 @@ class ProvedArea:
 
             ax[0].plot(avgs,label = 'Average EUR/PLL [BBL/FT]')
             ax[1].plot(counts,label = 'Well Count',color = 'green')
-            ax[0].hlines(xmin = 0,xmax=len(self.mask_list)+1, y = 0.9*analog_mean,linestyles='dashed',color = 'black')
+            ax[0].hlines(xmin = 0, xmax = len(self.mask_list)+1, y = 0.9*analog_mean, linestyles = 'dashed', color = 'black')
+            ax[1].hlines(xmin = 0, xmax = len(self.mask_list)+1, y = 50, linestyles = 'dashed', color = 'black')
 
             ax[0].scatter(np.arange(len(self.mask_list)+2),avgs,color ='black')
             ax[1].scatter(np.arange(len(self.mask_list)+2),counts,color = 'black')
+
+            for i, label in enumerate(counts):
+                ax[1].annotate(label,(np.arange(len(self.mask_list)+2)[i], counts[i]), textcoords = 'offset points', xytext=(0,10), ha = 'center')
 
             ax[0].legend()
             ax[1].legend()
