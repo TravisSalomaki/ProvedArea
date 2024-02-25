@@ -460,7 +460,7 @@ class ProvedArea:
             for _ in range(self.realizations):
                 print(f'{self.realization_count + 1}',end = ', ')
                 self.generate_realization()
-                self.radii_list = np.array([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0])
+                self.radii_list = np.arange(1,100)
                 self.mask_list = []
                 self.radii_level = 1
                 self.realization_count += 1
