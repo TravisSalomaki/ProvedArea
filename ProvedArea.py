@@ -288,6 +288,22 @@ class ProvedArea:
     #     return proved_radii
     
     def iterate_and_compare_masks(self):
+        """
+        This function handles both the iteration of radii masks and the comparison.
+
+        For the iteration section, the function first looks at what radii_level and corresponding radii_distance the program is at and then creates a boolean radii mask that has TRUE values
+        for all wells located within the area and FALSE for those outside of the domain. From there, it checks to see if the mask holds more than 50 wells. If not, it expands the search radius 5%
+        until it encompasses more than 50 wells OR it has been expanded five times. This is both for performance and practicallity. Once a mask has been created, it is then added to the 
+        self.mask_list which contains essentially a list of boolean arrays. Then the average eur/ft of that level is calculated. 
+
+        Moving on to the comparison section, this is where things get more complicated. Essentially, if a radii level has a mean eur/ft value > 90% of the analog well set's then we're cleared
+        to move to the next radii level. Else, we have to stop the iteration process and define the *proved* radii level as the previous radii level. There's a variety of edge cases that are
+        also included here to handle all combinations of radii layer parameters. 
+
+        RETURNS:
+        None: Appends radii masks into self.masks and defines self.proved_radii
+        """
+
 
         proved_radii_found = False
 
@@ -406,8 +422,6 @@ class ProvedArea:
             self.anchor_mean = np.mean(self.gdf.loc[self.anchors_idx]["EUR/FT (BBL/FT, MCF/FT)"]) #Get average EUR/ft of Anchor locations
             
             if self.anchor_mean >= 0.9 * self.analog_mean: #Check if the anchor points mean value is greater than 0.9*mean(analog wells)
-                # self.iterate_masks()                       #Defines which wells belong in which radii levels
-                # self.proved_radii = self.compare_masks()   #Analyzes the wells in various radii levels to determine which level is proved
                 self.iterate_and_compare_masks()
                 try:
                     self.generate_proved_areas()           #Generates the alphashapes
@@ -417,8 +431,6 @@ class ProvedArea:
                 self.proved_area_realizations[self.realization_count] = self.proved_areas
                 return None
             else:
-                #print('Anchor point mean EUR/FT is too low. Try re-intializing your Anchor points.')
-                #print('Anchor sample is not representative of analog distribution.')
                 self.failed_realizations += 1
                 return None
         else:
