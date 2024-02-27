@@ -26,8 +26,8 @@ class ProvedArea:
         self.gdf.drop(self.gdf.loc[self.gdf['EUR/FT (BBL/FT, MCF/FT)'].isna()].index,inplace=True)
         self.gdf.reset_index(inplace = True, drop = True)
 
-        #Instantiates `self.radii_list` which contains the distance, in miles, of each of the radii to be created
-        self.radii_list = np.arange(1.0,100.0)
+        #Instantiates `self.radii_distances` which contains the distance, in miles, of each of the radii to be created
+        self.radii_distances = np.arange(1.0,100.0)
 
         #Instantiates `self.mask_list` which will hold each of the created masks (i.e. which points belong to which radii)
         self.mask_list = []
@@ -127,7 +127,10 @@ class ProvedArea:
         """
         p10_p90_ratio = self.calculate_p10_p90_ratio(self.gdf['EUR/FT (BBL/FT, MCF/FT)'])
         sample_size = self.get_sample_size(p10_p90_ratio)
-        self.anchors_idx = np.random.choice(self.gdf.index,sample_size, replace = False)
+        #self.anchors_idx = np.random.choice(self.gdf.index,sample_size, replace = False)
+        self.anchors_idx = np.array([ 86,  22, 104, 154,  50, 453, 193, 238, 277, 244, 404, 517, 454,
+       391, 486, 395, 183, 121, 511, 473, 284, 403,  67, 243, 373, 212,
+         8, 377,  10,  69, 504, 221, 208, 318,  79])
         return None
     
     def generate_radii(self, radius):
@@ -209,7 +212,7 @@ class ProvedArea:
                 aggregated_masks &= ~mask
         return aggregated_masks
     
-    def update_radii_list(self, radii_level):
+    def update_radii_distances(self, radii_level):
         """
         Increase the distances of the radii from the specified radii level to the end by 5%.
 
@@ -222,7 +225,7 @@ class ProvedArea:
         The function takes a radii level index and multiplies the lengths of radii starting 
         from the specified level to the end by 1.05, effectively increasing their lengths by 5%.
         """
-        self.radii_list[radii_level:] = self.radii_list[radii_level:] * 1.05
+        self.radii_distances[radii_level:] = self.radii_distances[radii_level:] * 1.05
         return None
 
     # def iterate_masks(self):
@@ -243,7 +246,7 @@ class ProvedArea:
 
     #         # Generate an initial mask attempt -> []
     #         mask = self.generate_mask(
-    #             self.generate_boundary(self.generate_radii(self.radii_list[self.radii_level-1])),
+    #             self.generate_boundary(self.generate_radii(self.radii_distances[self.radii_level-1])),
     #             self.radii_level
     #             )
 
@@ -251,11 +254,11 @@ class ProvedArea:
     #         while mask.sum() <= 50:                             #<= fifty points in a given radii level
     #             if update_count == 5:
     #                 return  # Exit the function if radii cannot be increased further
-    #             self.update_radii_list(self.radii_level - 1)    #Expands the distance of the proceeding radii by 5%
+    #             self.update_radii_distances(self.radii_level - 1)    #Expands the distance of the proceeding radii by 5%
     #             update_count += 1
 
     #             mask = self.generate_mask(
-    #                 self.generate_boundary(self.generate_radii(self.radii_list[self.radii_level - 1])),
+    #                 self.generate_boundary(self.generate_radii(self.radii_distances[self.radii_level - 1])),
     #                 self.radii_level
     #             )
 
@@ -290,15 +293,15 @@ class ProvedArea:
 
         while not proved_radii_found:
             #Generate an intial mask attempt
-            radius_distance = self.radii_list[self.radii_level-1]
+            radius_distance = self.radii_distances[self.radii_level-1]
             mask = self.generate_mask(self.generate_boundary(self.generate_radii(radius_distance)),self.radii_level)
 
             #Iterates current concentric radii until it either contains >50 wells or it's tried to expand its radial distance 5 times. 
             update_count = 0
             while mask.sum() <= 50 and update_count < 5:
-                self.update_radii_list(self.radii_level - 1) #radii level is 1-indexed while radii-list is 0-indexed
+                self.update_radii_distances(self.radii_level - 1) #radii level is 1-indexed while radii-list is 0-indexed
 
-                radius_distance = self.radii_list[self.radii_level-1]
+                radius_distance = self.radii_distances[self.radii_level-1]
                 mask = self.generate_mask(self.generate_boundary(self.generate_radii(radius_distance)),self.radii_level)
 
                 update_count += 1
@@ -306,17 +309,39 @@ class ProvedArea:
             self.mask_list.append(mask) #adds our mask to the mask_list
             mean_eur_per_foot_of_current_radii = self.gdf[mask]['EUR/FT (BBL/FT, MCF/FT)'].mean()
 
-            if len(self.mask_list) == 1:
-                if mean_eur_per_foot_of_current_radii < (0.9 * self.analog_mean):
+            #The current radii_level's mean eur/ft is < 90% of the analog's
+            if mean_eur_per_foot_of_current_radii < (0.9 * self.analog_mean):
+
+                #Are we on our first iteration?
+                if len(self.mask_list) == 1:
                     self.proved_radii = None
                     proved_radii_found = True
+                
+                #If we aren't on the first iteration nor we haven't expanded five times...
+                else:
+                    self.proved_radii = self.radii_level - 1
+                    proved_radii_found = True
+
+            #The current radii_level's mean eur/ft is >= 90% of the analog's
+            elif mean_eur_per_foot_of_current_radii >= (0.9 * self.analog_mean):
+
+                #The radii distance was expanded five times. 
+                if update_count == 5:
+                    #The final expansion pushed our well count above 50
+                    if mask.sum() > 50:
+                        self.proved_radii = self.radii_level
+                        proved_radii_found = True
+                    #The final expansion did NOT push our well count above 50
+                    else:
+                        self.proved_radii = self.radii_level - 1
+                        proved_radii_found = True
+
+                #We're still above 90% analog mean and we have less than five expansions. 
                 else:
                     self.radii_level += 1
-            elif len(self.mask_list) > 1 and mean_eur_per_foot_of_current_radii < (0.9 * self.analog_mean):
-                self.proved_radii = self.radii_level - 1 #we want to return the previous radii level since the current one is the one that broke our 90% constraint
-                proved_radii_found = True
             else:
-                self.radii_level += 1
+                pass
+
 
         return
      
@@ -342,7 +367,7 @@ class ProvedArea:
             return None
 
         # Retrieve the polygons corresponding to the 'proved' radii level
-        proved_radii_polygons = self.generate_boundary(self.generate_radii(self.radii_list[self.proved_radii]))[0].geoms
+        proved_radii_polygons = self.generate_boundary(self.generate_radii(self.radii_distances[self.proved_radii]))[0].geoms
         
         # Generate alpha shapes or concave hulls for wells within each polygon and store them in self.proved_areas
         for polygon in proved_radii_polygons:
@@ -460,7 +485,7 @@ class ProvedArea:
             for _ in range(self.realizations):
                 print(f'{self.realization_count + 1}',end = ', ')
                 self.generate_realization()
-                self.radii_list = np.arange(1,100)
+                self.radii_distances = np.arange(1.0,100.0)
                 self.mask_list = []
                 self.radii_level = 1
                 self.realization_count += 1
@@ -477,7 +502,7 @@ class ProvedArea:
             print(f'\n\n{self.failed_realizations}/{self.realizations} realizations were not used as the mean EUR/FT of the anchor points did not exceed 90% of the analog set mean.')
         else:
             print('\nAll realizations completed successfully.')
-            print(f'Proved Radii Distance: {self.radii_list[self.proved_radii]} miles')
+            print(f'Proved Radii Distance: {self.radii_distances[self.proved_radii]} miles')
         return None
     
     def plot_comparisons(self):
@@ -503,6 +528,9 @@ class ProvedArea:
             counts.insert(1,len(self.anchors_idx))
 
             fig,ax = plt.subplots(1,2,figsize = [18,7])
+            ax[0].grid()
+            ax[1].grid()
+
             xticks = ['Analog Wells','Anchor Wells'] + [ 'r' + str(i) for i in range(1,len(self.mask_list)+1)]
             ax[0].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45)
             ax[1].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45)
@@ -534,7 +562,7 @@ class ProvedArea:
         """
         if self.realizations == 1:   
             _, ax = plt.subplots(figsize = [8,10])
-            self.generate_boundary(self.generate_radii(self.radii_list[self.proved_radii])).plot(ax=ax,alpha = 1,color = 'lightblue')
+            self.generate_boundary(self.generate_radii(self.radii_distances[self.proved_radii])).plot(ax=ax,alpha = 1,color = 'lightblue')
             for i in self.proved_area_realizations[-1]:
                 gpd.GeoSeries(Polygon(i)).plot(ax=ax,alpha = 0.8,color = 'darkblue')
             self.gdf.plot(ax=ax,c= 'black',label = 'Analog Wells')
@@ -564,7 +592,7 @@ class ProvedArea:
             self.gdf.plot(label = 'Analog Wells',ax =ax,color = 'black')
 
             #Radiis 
-            for idx,i in enumerate(reversed(self.radii_list[0:self.proved_radii+1])):
+            for idx,i in enumerate(reversed(self.radii_distances[0:self.proved_radii+1])):
                 self.generate_boundary(self.generate_radii(i)).plot(ax=ax,alpha = np.linspace(0.2,1,self.proved_radii+1)[idx],color = 'grey')
 
             #Points in radii
