@@ -42,9 +42,9 @@ class ProvedArea:
 
         #Instantiates the self.failed_realizations attribute
         self.failed_realizations = 0
-
-        #Executes the self.driver() function
-        self.driver()
+        
+        plt.style.use("fivethirtyeight")
+        
 
     def parse_data(self, header_path, forecast_parameters_path, phase = 'oil'):
         """
@@ -127,10 +127,7 @@ class ProvedArea:
         """
         p10_p90_ratio = self.calculate_p10_p90_ratio(self.gdf['EUR/FT (BBL/FT, MCF/FT)'])
         sample_size = self.get_sample_size(p10_p90_ratio)
-        #self.anchors_idx = np.random.choice(self.gdf.index,sample_size, replace = False)
-        self.anchors_idx = np.array([ 86,  22, 104, 154,  50, 453, 193, 238, 277, 244, 404, 517, 454,
-       391, 486, 395, 183, 121, 511, 473, 284, 403,  67, 243, 373, 212,
-         8, 377,  10,  69, 504, 221, 208, 318,  79])
+        self.anchors_idx = np.random.choice(self.gdf.index,sample_size, replace = False)
         return None
     
     def generate_radii(self, radius):
@@ -227,65 +224,6 @@ class ProvedArea:
         """
         self.radii_distances[radii_level:] = self.radii_distances[radii_level:] * 1.05
         return None
-
-    # def iterate_masks(self):
-    #     """
-    #     Masks are simply a means of classifying which wells belong in which radii groups. 
-
-    #     The function generates masks for different radii levels within a defined boundary. 
-    #     If a generated mask contains less than 50 points, it increases the radius and tries again. 
-    #     After attempting to increase the radius 5 times or reaching more than 50 points in the mask, 
-    #     it appends the created mask to the mask_list.
-
-    #     If the radii distance cannot be increased further, the loop terminates.
-
-    #     RETURNS:
-    #     None: Modifies the mask_list in place.
-    #     """
-    #     for _ in range(5):
-
-    #         # Generate an initial mask attempt -> []
-    #         mask = self.generate_mask(
-    #             self.generate_boundary(self.generate_radii(self.radii_distances[self.radii_level-1])),
-    #             self.radii_level
-    #             )
-
-    #         update_count = 0
-    #         while mask.sum() <= 50:                             #<= fifty points in a given radii level
-    #             if update_count == 5:
-    #                 return  # Exit the function if radii cannot be increased further
-    #             self.update_radii_distances(self.radii_level - 1)    #Expands the distance of the proceeding radii by 5%
-    #             update_count += 1
-
-    #             mask = self.generate_mask(
-    #                 self.generate_boundary(self.generate_radii(self.radii_distances[self.radii_level - 1])),
-    #                 self.radii_level
-    #             )
-
-    #         self.mask_list.append(mask)
-
-    #         # Increment the radii_level parameter
-    #         self.radii_level += 1
-
-    # def compare_masks(self):
-    #     """
-
-    #     This function iterates through the list of radii from smallest to largest. 
-    #     It stops when either the mean EUR/ft value for a given radii level falls below 
-    #     90% of the Analog Well Set mean or when it reaches the last radii group.
-
-    #     RETURNS:
-    #     int: The radii level considered 'proved'.
-    #     """
-    #     proved_radii = 0
-    #     for idx,mask in enumerate(self.mask_list):
-    #         mask_mean = self.gdf[mask]['EUR/FT (BBL/FT, MCF/FT)'].mean()
-    #         if mask_mean < (0.9 *self.analog_mean):
-    #             proved_radii = idx-1
-    #             break
-    #         else:
-    #             proved_radii = idx
-    #     return proved_radii
     
     def iterate_and_compare_masks(self):
         """
@@ -485,8 +423,8 @@ class ProvedArea:
         self.stacked_realization = count_overlapping_features(all)
         self.stacked_realization = self.stacked_realization.sort_values('count',ascending = False).reset_index(drop = True)
         return None
-
-    def driver(self):
+    
+    def run_simulation(self):
         self.proved_area_realizations = [None] * self.realizations #Prepopulates the proved_area_realizations list with Nones
         self.realization_count = 0
 
@@ -540,27 +478,27 @@ class ProvedArea:
             counts.insert(1,len(self.anchors_idx))
 
             fig,ax = plt.subplots(1,2,figsize = [18,7])
-            ax[0].grid()
-            ax[1].grid()
 
             xticks = ['Analog Wells','Anchor Wells'] + [ 'r' + str(i) for i in range(1,len(self.mask_list)+1)]
-            ax[0].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45)
-            ax[1].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45)
-            ax[0].set_ylabel('Average EUR/PLL [BBL/FT]')
-            ax[1].set_ylabel('Wells')
+            ax[0].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45, fontsize = 14)
+            ax[1].set_xticks(np.arange(len(self.mask_list)+2),labels = xticks,rotation = 45, fontsize = 14)
+            ax[0].tick_params(axis='y', labelsize=14)
+            ax[1].tick_params(axis = 'y',labelsize = 14)
+            ax[0].set_ylabel('Average EUR/PLL [BBL/FT]', fontsize = 14)
+            ax[1].set_ylabel('Well Count', fontsize = 14)
 
             ax[0].plot(avgs,label = 'Average EUR/PLL [BBL/FT]')
             ax[1].plot(counts,label = 'Well Count',color = 'green')
             ax[0].hlines(xmin = 0, xmax = len(self.mask_list)+1, y = 0.9*analog_mean, linestyles = 'dashed', color = 'black')
             ax[1].hlines(xmin = 0, xmax = len(self.mask_list)+1, y = 50, linestyles = 'dashed', color = 'black')
 
-            ax[0].scatter(np.arange(len(self.mask_list)+2),avgs,color ='black')
-            ax[1].scatter(np.arange(len(self.mask_list)+2),counts,color = 'black')
+            ax[0].scatter(np.arange(len(self.mask_list)+2), avgs, color = 'black', s = 40)
+            ax[1].scatter(np.arange(len(self.mask_list)+2), counts, color = 'black', s = 40)
 
             for i, label in enumerate(counts):
-                ax[1].annotate(label,(np.arange(len(self.mask_list)+2)[i], counts[i]), textcoords = 'offset points', xytext=(0,20), ha = 'center')
+                ax[1].annotate(label,(np.arange(len(self.mask_list)+2)[i], counts[i]), textcoords = 'offset points', xytext=(0,20), ha = 'center', fontsize = 12)
 
-            ax[0].annotate(round(0.9*analog_mean,1), (0,0.9*analog_mean),textcoords = 'offset points', xytext = (0,5), ha = 'left')
+            ax[0].annotate(round(0.9*analog_mean,1), (0,0.9*analog_mean),textcoords = 'offset points', xytext = (0,5), ha = 'left', fontsize = 12)
 
             ax[0].legend()
             ax[1].legend()
@@ -586,8 +524,8 @@ class ProvedArea:
                             Patch(facecolor='blue',edgecolor='w',label= 'Proved Area')
                             ]
             ax.legend(handles = legend_elements)
-            ax.set_xlabel("Longitude")
-            ax.set_ylabel('Latitude')
+            ax.set_xlabel("Longitude", fontsize = 12)
+            ax.set_ylabel('Latitude', fontsize = 12)
         else:
             print("Too many realizations. Please instantiate a new ProvedArea object with the realizations parameter set to '1'")
         return None
@@ -598,9 +536,9 @@ class ProvedArea:
         """
 
         if self.realizations == 1:
-            fig,ax = plt.subplots(figsize=[8,10])
-            ax.set_xlabel('Longitude')
-            ax.set_ylabel('Latitude')
+            fig,ax = plt.subplots(figsize = [12,12])
+            ax.set_xlabel('Longitude', fontsize = 14)
+            ax.set_ylabel('Latitude', fontsize = 14)
             self.gdf.plot(label = 'Analog Wells',ax =ax,color = 'black')
 
             #Radiis 
@@ -608,7 +546,7 @@ class ProvedArea:
                 self.generate_boundary(self.generate_radii(i)).plot(ax=ax,alpha = np.linspace(0.2,1,self.proved_radii+1)[idx],color = 'grey')
 
             #Points in radii
-            for idx,x in enumerate(self.mask_list):
+            for idx,_ in enumerate(self.mask_list):
                 self.gdf[self.mask_list[idx]].plot(label = f'r{idx+1} wells',ax=ax)
 
             ax.legend()
@@ -625,7 +563,7 @@ class ProvedArea:
         stacked_realization_subset_boundary = gpd.GeoDataFrame(geometry=[stacked_realization_subset.geometry.unary_union.boundary])
 
 
-        _, ax = plt.subplots(figsize = [8,10])
+        _, ax = plt.subplots(figsize = [10,12])
         overlaps = stacked_realization_subset.plot(ax=ax,column = 'count',legend = True,cmap = 'plasma', edgecolor = 'none',vmin = cbar_min, vmax = cbar_max)
         boundary = stacked_realization_subset_boundary.plot(ax=ax, color = 'black')
         self.gdf.plot(ax=ax,color = 'black',label = 'Analog Wells',markersize = 3)
@@ -634,10 +572,10 @@ class ProvedArea:
         ax.set_ylabel("Latitude")
         ax.legend()
 
-    def export_shapefiles(self, p_series = 0.01):
+    def export_shapefile(self, p_series = 0.01, zip = False):
 
         folder_name = input("What would you like to name the ShapeFile?: ")
-        folder_path = os.getcwd()+'\\'+folder_name
+        folder_path = os.path.join(os.getcwd(),folder_name) 
         try:
             os.mkdir(folder_path)
         except FileExistsError:
@@ -648,6 +586,7 @@ class ProvedArea:
 
         shapefile_gdf = gpd.GeoDataFrame(geometry=[stacked_realization_subset.geometry.unary_union],crs = 'EPSG:4326')
         shapefile_gdf.to_file(folder_path)
-        os.remove(folder_path + '\\' + folder_name +'.cpg')
-        shutil.make_archive(folder_name, 'zip', folder_path)
+        if zip == True:
+            os.remove(folder_path + '\\' + folder_name +'.cpg')
+            shutil.make_archive(folder_name, 'zip', folder_path)
         return None 
